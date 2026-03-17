@@ -29,7 +29,7 @@ MVP 接口分组与资源结构
 | GET | /api/funds/{fundId}/holdings | 当前持仓表 | 公开 |
 | GET | /api/funds/{fundId}/recent-activity | 最近交易与时间线 | 公开 |
 | GET | /api/funds/{fundId}/deal-cycle | 右侧操作栏需要的 deal cycle 信息 | 公开 |
-| GET | /api/funds/{fundId}/historical-wallets | 管理人历史钱包与历史战绩 | 公开 |
+
 
 ## 4. 申购接口
 
@@ -62,7 +62,7 @@ MVP 接口分组与资源结构
 
 ## 7. Agent Trading Relay（Backend 代签交易）
 
-Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (KMS) 签署订单并提交到 Polymarket CLOB。
+Agent 通过此接口提交交易意图，Backend 用 Owner Key (KMS) 签署订单并提交到 Polymarket CLOB。
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
@@ -73,7 +73,7 @@ Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (
 | GET | /api/agent/funds/{fundId}/orders/{orderId} | 查看单笔订单状态 | agent |
 | GET | /api/agent/funds/{fundId}/positions | 查看当前持仓 | agent |
 | GET | /api/agent/funds/{fundId}/balance | 查看 USDC.e 余额 | agent |
-| GET | /api/agent/funds/{fundId}/markets | 查看可交易市场（白名单） | agent |
+| GET | /api/agent/funds/{fundId}/markets | 查看可交易市场 | agent |
 
 **POST /api/agent/funds/{fundId}/orders 请求体：**
 
@@ -91,23 +91,13 @@ Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (
 **Backend 处理流程：**
 
 1. 验证 Agent 身份和 fund 授权
-2. 风控校验：市场白名单、单笔限额、仓位限制、每日交易量
-3. 计算 makerAmount / takerAmount（6 位小数）
-4. 构造 EIP-712 Order（maker=Safe, signer=OwnerEOA, signatureType=2）
-5. AWS KMS 签署 orderHash（Owner Key）
-6. 提交到 Polymarket CLOB API（附 Builder API Key 做订单归属）
-7. 返回 orderId 和状态
+2. 计算 makerAmount / takerAmount（6 位小数）
+3. 构造 EIP-712 Order（maker=Safe, signer=OwnerEOA, signatureType=2）
+4. AWS KMS 签署 orderHash（Owner Key）
+5. 提交到 Polymarket CLOB API（附 Builder API Key 做订单归属）
+6. 返回 orderId 和状态
 
-## 8. 历史钱包认领
-
-| 方法 | 路径 | 用途 | 权限 |
-|------|------|------|------|
-| POST | /api/manager/wallet-claims/challenge | 生成历史钱包签名 challenge | manager / admin |
-| POST | /api/manager/wallet-claims/verify | 验证签名并完成钱包认领 | manager / admin |
-| GET | /api/manager/wallet-claims | 查看认领列表与状态 | manager / admin |
-| DELETE | /api/manager/wallet-claims/{claimId} | 删除 / 撤销认领 | manager / admin |
-
-## 9. Fund / Manager 后台
+## 8. Fund / Manager 后台
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
@@ -116,7 +106,7 @@ Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (
 | GET | /api/admin/funds/{fundId} | 后台查看 fund 配置详情 | admin |
 | GET | /api/admin/funds/{fundId}/safe | 查看 Safe 信息 | admin |
 
-## 10. Onboarding（Safe 部署与配置）
+## 9. Onboarding（Safe 部署与配置）
 
 通过 Polymarket Builder Relayer 免 gas 执行。需要平台级 Builder API Key（key / secret / passphrase，在 polymarket.com/settings 开发者页面创建）。
 
@@ -135,19 +125,7 @@ Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (
 | Builder API Key (key/secret/passphrase) | polymarket.com 开发者页面 | Relayer 免 gas 操作、订单归属 | 后端配置 / Secrets Manager |
 | CLOB API Key (apiKey/secret/passphrase) | CLOB /auth/api-key | L2 HMAC 认证提交订单 | 后端加密存储 |
 
-## 11. 风控参数
-
-| 方法 | 路径 | 用途 | 权限 |
-|------|------|------|------|
-| GET | /api/admin/funds/{fundId}/risk-config | 读取风控配置 | admin |
-| PATCH | /api/admin/funds/{fundId}/risk-config | 更新风控配置 | admin |
-| GET | /api/admin/funds/{fundId}/market-whitelist | 读取市场白名单 | admin |
-| POST | /api/admin/funds/{fundId}/market-whitelist | 新增白名单 market | admin |
-| DELETE | /api/admin/funds/{fundId}/market-whitelist/{itemId} | 删除白名单 market | admin |
-| POST | /api/admin/funds/{fundId}/pause-trading | 暂停交易（停止签署新订单） | admin |
-| POST | /api/admin/funds/{fundId}/resume-trading | 恢复交易 | admin |
-
-## 12. Deal Cycle 与 NAV
+## 10. Deal Cycle 与 NAV
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
@@ -161,7 +139,7 @@ Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (
 | GET | /api/admin/funds/{fundId}/nav-snapshots | 查看 NAV 快照 | admin |
 | GET | /api/admin/funds/{fundId}/valuation-inputs | 查看估值输入与 TWAP 序列 | admin |
 
-## 13. 同步与系统状态
+## 11. 同步与系统状态
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
@@ -171,19 +149,19 @@ Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (
 | GET | /api/admin/funds/{fundId}/trading-audit-log | 查看交易审计日志 | admin |
 | GET | /api/health | 系统健康检查 | 内部 / 监控 |
 
-## 14. 建议的状态枚举
+## 12. 建议的状态枚举
 
 | 模块 | 说明 |
 |------|------|
 | subscription_status | pending / queued / frozen / settled / cancelled / failed |
 | redemption_status | pending / queued / frozen / nav_locked / settling / settled / cancelled / failed |
 | deal_cycle_status | upcoming / open / frozen / nav_calculated / confirmed / settling / settled / failed |
-| fund_status | draft / onboarding / live / trading_paused / subscription_paused / redemption_paused / fully_paused / archived |
-| order_status | pending_risk_check / approved / submitted / live / matched / cancelled / rejected / failed |
+| fund_status | draft / onboarding / live / subscription_paused / redemption_paused / fully_paused / archived |
+| order_status | submitted / live / matched / cancelled / failed |
 | onboarding_status | not_started / safe_deploying / safe_deployed / approving / approved / clob_registered / completed |
 
-## 15. MVP 最小必需接口集
+## 13. MVP 最小必需接口集
 
-- **投资者侧**：基金列表、基金详情、performance、holdings、deal-cycle、subscription quote / submit、redemption quote / submit、我的持仓、我的申购、我的赎回、历史钱包展示。
+- **投资者侧**：基金列表、基金详情、performance、holdings、deal-cycle、subscription quote / submit、redemption quote / submit、我的持仓、我的申购、我的赎回。
 - **Agent 侧**：提交订单、取消订单、查看挂单、查看持仓、查看余额、查看可交易市场。
-- **后台侧**：创建 fund、更新 fund、onboarding（deploy-safe / approve-tokens / register-clob）、risk-config 读写、market-whitelist 管理、deal cycle preview / confirm、sync status、trading audit log。
+- **后台侧**：创建 fund、更新 fund、onboarding（deploy-safe / approve-tokens / register-clob）、deal cycle preview / confirm、sync status、trading audit log。
