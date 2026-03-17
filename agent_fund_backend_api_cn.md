@@ -6,6 +6,7 @@ MVP 接口分组与资源结构
 
 - 对外展示接口使用 `/api/funds/...`。
 - 当前用户资产接口使用 `/api/me/...`。
+- Agent 交易接口使用 `/api/agent/...`。
 - 内部后台与运营接口使用 `/api/admin/...`。
 - 认证接口单独使用 `/api/auth/...`。
 
@@ -59,7 +60,45 @@ MVP 接口分组与资源结构
 | GET | /api/me/investment-summary | 累计申购 / 赎回 / 当前估值汇总 | 登录用户 |
 | GET | /api/me/activity | 用户投资活动时间线 | 登录用户 |
 
-## 7. 历史钱包认领
+## 7. Agent Trading Relay（Backend 代签交易）
+
+Agent 通过此接口提交交易意图，Backend 校验风控后用 Owner Key (KMS) 签署订单并提交到 Polymarket CLOB。
+
+| 方法 | 路径 | 用途 | 权限 |
+|------|------|------|------|
+| POST | /api/agent/funds/{fundId}/orders | 提交交易意图（market, side, size, price） | agent |
+| DELETE | /api/agent/funds/{fundId}/orders/{orderId} | 取消订单 | agent |
+| DELETE | /api/agent/funds/{fundId}/orders | 取消全部订单 | agent |
+| GET | /api/agent/funds/{fundId}/orders | 查看当前挂单 | agent |
+| GET | /api/agent/funds/{fundId}/orders/{orderId} | 查看单笔订单状态 | agent |
+| GET | /api/agent/funds/{fundId}/positions | 查看当前持仓 | agent |
+| GET | /api/agent/funds/{fundId}/balance | 查看 USDC.e 余额 | agent |
+| GET | /api/agent/funds/{fundId}/markets | 查看可交易市场（白名单） | agent |
+
+**POST /api/agent/funds/{fundId}/orders 请求体：**
+
+```json
+{
+    "tokenId": "75467129...",
+    "side": "BUY",
+    "size": "10.0",
+    "price": "0.55",
+    "orderType": "GTC",
+    "negRisk": false
+}
+```
+
+**Backend 处理流程：**
+
+1. 验证 Agent 身份和 fund 授权
+2. 风控校验：市场白名单、单笔限额、仓位限制、每日交易量
+3. 计算 makerAmount / takerAmount（6 位小数）
+4. 构造 EIP-712 Order（maker=Safe, signer=OwnerEOA, signatureType=2）
+5. AWS KMS 签署 orderHash（Owner Key）
+6. 提交到 Polymarket CLOB API（附 Builder API Key 做订单归属）
+7. 返回 orderId 和状态
+
+## 8. 历史钱包认领
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
@@ -68,33 +107,47 @@ MVP 接口分组与资源结构
 | GET | /api/manager/wallet-claims | 查看认领列表与状态 | manager / admin |
 | DELETE | /api/manager/wallet-claims/{claimId} | 删除 / 撤销认领 | manager / admin |
 
-## 8. Fund / Manager 后台
+## 9. Fund / Manager 后台
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
 | POST | /api/admin/funds | 创建 fund | admin |
 | PATCH | /api/admin/funds/{fundId} | 更新 fund 基础资料 | admin |
 | GET | /api/admin/funds/{fundId} | 后台查看 fund 配置详情 | admin |
-| POST | /api/admin/funds/{fundId}/safe | 绑定或初始化 Safe | admin |
 | GET | /api/admin/funds/{fundId}/safe | 查看 Safe 信息 | admin |
-| POST | /api/admin/funds/{fundId}/status | 更新 fund 状态 | admin |
 
-## 9. Module 与风险参数
+## 10. Onboarding（Safe 部署与配置）
+
+通过 Polymarket Builder Relayer 免 gas 执行。需要平台级 Builder API Key（key / secret / passphrase，在 polymarket.com/settings 开发者页面创建）。
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
-| GET | /api/admin/funds/{fundId}/module-config | 读取 module 配置 | admin |
-| PATCH | /api/admin/funds/{fundId}/module-config | 更新 module 配置 | admin |
+| POST | /api/admin/funds/{fundId}/onboarding/deploy-safe | 通过 Relayer 部署 Safe（免 gas） | admin |
+| POST | /api/admin/funds/{fundId}/onboarding/approve-tokens | 通过 Relayer 执行 7 个 Token Approve（免 gas） | admin |
+| POST | /api/admin/funds/{fundId}/onboarding/register-clob | 创建 CLOB API Key | admin |
+| GET | /api/admin/funds/{fundId}/onboarding/status | 查看 onboarding 进度 | admin |
+
+**凭证管理：** 每个基金 onboarding 产生的凭证需安全存储：
+
+| 凭证 | 来源 | 用途 | 存储位置 |
+|------|------|------|---------|
+| Owner Key | HD 派生 (BIP-44) | 签署订单、Safe 管理 | AWS KMS |
+| Builder API Key (key/secret/passphrase) | polymarket.com 开发者页面 | Relayer 免 gas 操作、订单归属 | 后端配置 / Secrets Manager |
+| CLOB API Key (apiKey/secret/passphrase) | CLOB /auth/api-key | L2 HMAC 认证提交订单 | 后端加密存储 |
+
+## 11. 风控参数
+
+| 方法 | 路径 | 用途 | 权限 |
+|------|------|------|------|
+| GET | /api/admin/funds/{fundId}/risk-config | 读取风控配置 | admin |
+| PATCH | /api/admin/funds/{fundId}/risk-config | 更新风控配置 | admin |
 | GET | /api/admin/funds/{fundId}/market-whitelist | 读取市场白名单 | admin |
 | POST | /api/admin/funds/{fundId}/market-whitelist | 新增白名单 market | admin |
 | DELETE | /api/admin/funds/{fundId}/market-whitelist/{itemId} | 删除白名单 market | admin |
-| GET | /api/admin/funds/{fundId}/risk-limits | 读取风险限额 | admin |
-| PATCH | /api/admin/funds/{fundId}/risk-limits | 更新风险限额 | admin |
-| POST | /api/admin/funds/{fundId}/pause | 暂停 fund / module | admin |
-| POST | /api/admin/funds/{fundId}/resume | 恢复 fund / module | admin |
-| POST | /api/admin/funds/{fundId}/cancel-only | 切换为 cancel-only 模式 | admin |
+| POST | /api/admin/funds/{fundId}/pause-trading | 暂停交易（停止签署新订单） | admin |
+| POST | /api/admin/funds/{fundId}/resume-trading | 恢复交易 | admin |
 
-## 10. Deal Cycle 与 NAV
+## 12. Deal Cycle 与 NAV
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
@@ -108,25 +161,29 @@ MVP 接口分组与资源结构
 | GET | /api/admin/funds/{fundId}/nav-snapshots | 查看 NAV 快照 | admin |
 | GET | /api/admin/funds/{fundId}/valuation-inputs | 查看估值输入与 TWAP 序列 | admin |
 
-## 11. 同步与系统状态
+## 13. 同步与系统状态
 
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
 | GET | /api/admin/funds/{fundId}/sync-status | 订单 / 成交 / 持仓 / 价格同步状态 | admin |
 | POST | /api/admin/funds/{fundId}/resync | 触发重同步 | admin |
 | GET | /api/admin/funds/{fundId}/jobs | 查看后台任务状态 | admin |
+| GET | /api/admin/funds/{fundId}/trading-audit-log | 查看交易审计日志 | admin |
 | GET | /api/health | 系统健康检查 | 内部 / 监控 |
 
-## 12. 建议的状态枚举
+## 14. 建议的状态枚举
 
 | 模块 | 说明 |
 |------|------|
 | subscription_status | pending / queued / frozen / settled / cancelled / failed |
 | redemption_status | pending / queued / frozen / nav_locked / settling / settled / cancelled / failed |
 | deal_cycle_status | upcoming / open / frozen / nav_calculated / confirmed / settling / settled / failed |
-| fund_status | draft / live / subscription_paused / redemption_paused / fully_paused / archived |
+| fund_status | draft / onboarding / live / trading_paused / subscription_paused / redemption_paused / fully_paused / archived |
+| order_status | pending_risk_check / approved / submitted / live / matched / cancelled / rejected / failed |
+| onboarding_status | not_started / safe_deploying / safe_deployed / approving / approved / clob_registered / completed |
 
-## 13. MVP 最小必需接口集
+## 15. MVP 最小必需接口集
 
 - **投资者侧**：基金列表、基金详情、performance、holdings、deal-cycle、subscription quote / submit、redemption quote / submit、我的持仓、我的申购、我的赎回、历史钱包展示。
-- **后台侧**：创建 fund、更新 fund、module config 读写、deal cycle preview / confirm、sync status。
+- **Agent 侧**：提交订单、取消订单、查看挂单、查看持仓、查看余额、查看可交易市场。
+- **后台侧**：创建 fund、更新 fund、onboarding（deploy-safe / approve-tokens / register-clob）、risk-config 读写、market-whitelist 管理、deal cycle preview / confirm、sync status、trading audit log。

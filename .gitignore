@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+
+# Build
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Internal docs
+polymarket_onboarding_验证报告.md
+polymarket_onboarding_plan.md
+polymarket_relayer_flow.md
+polymarket_verified_flow.md
+
+# Onboarding scripts & Safe contracts
+scripts/
+safe-smart-account/
+
+CLAUDE.md
